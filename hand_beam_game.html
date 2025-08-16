@@ -4,13 +4,19 @@
 <meta charset="UTF-8">
 <title>Hand Beam AR Game</title>
 <style>
-  body { margin:0; overflow:hidden; background:black; }
-  canvas { position:absolute; top:0; left:0; }
-  video { display:none; }
+html, body {
+  margin:0; padding:0; overflow:hidden; width:100%; height:100%;
+  touch-action:none; /* スマホでスクロール無効 */
+  background:black;
+}
+video, canvas {
+  position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover;
+}
 </style>
 </head>
 <body>
-<video id="camera" autoplay playsinline></video>
+
+<video id="camera" autoplay playsinline muted></video>
 <canvas id="game"></canvas>
 
 <script type="module">
@@ -20,41 +26,41 @@ import {Camera} from 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camer
 const video = document.getElementById('camera');
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// 敵オブジェクト
+// 敵情報
 let enemies = [];
 for(let i=0;i<5;i++){
-  enemies.push({x:Math.random()*canvas.width, y:Math.random()*canvas.height/2 + 50, radius:30});
+  enemies.push({x:Math.random()*canvas.width, y:Math.random()*canvas.height/2+50, radius:30});
 }
 
-// ビーム配列
+// ビーム情報
 let beams = [];
-
-// 爆発配列
 let explosions = [];
 
-// MediaPipe Hands
+// MediaPipe Hands 設定
 const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
 hands.setOptions({maxNumHands:1, minDetectionConfidence:0.7, minTrackingConfidence:0.7});
 
-hands.onResults(results => {
+// 手の検出結果
+hands.onResults(results=>{
   if(results.multiHandLandmarks && results.multiHandLandmarks.length>0){
     const lm = results.multiHandLandmarks[0];
-    const x = lm[8].x * canvas.width; // 人差し指先
+    const x = lm[8].x * canvas.width;
     const y = lm[8].y * canvas.height;
-    
-    // 左クリックみたいに指を曲げたらビーム発射
-    const curl = lm[8].y - lm[6].y; // 指先と指の付け根の差
+
+    // 指を曲げたらビーム発射（人差し指先と第2関節の差）
+    const curl = lm[8].y - lm[6].y;
     if(curl < -0.02){
-      beams.push({x,y, vx:0, vy:-10});
+      beams.push({x,y,vx:0,vy:-15});
     }
   }
 });
 
 // カメラ起動
-const cam = new Camera(video, {onFrame: async()=>{ await hands.send({image:video}) }, width:640, height:480});
+const cam = new Camera(video, {onFrame: async()=>{await hands.send({image:video})}, width:640, height:480});
 cam.start();
 
 // 描画ループ
@@ -62,28 +68,28 @@ function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   // 敵描画
-  ctx.fillStyle = 'red';
-  enemies.forEach(e => {
+  ctx.fillStyle='red';
+  enemies.forEach(e=>{
     ctx.beginPath();
-    ctx.arc(e.x, e.y, e.radius, 0, Math.PI*2);
+    ctx.arc(e.x,e.y,e.radius,0,Math.PI*2);
     ctx.fill();
   });
 
   // ビーム描画
   ctx.fillStyle='cyan';
-  beams.forEach((b, i)=>{
+  beams.forEach((b,i)=>{
     b.y += b.vy;
     ctx.beginPath();
-    ctx.arc(b.x, b.y, 8, 0, Math.PI*2);
+    ctx.arc(b.x,b.y,10,0,Math.PI*2);
     ctx.fill();
 
-    // 当たり判定
+    // 衝突判定
     enemies.forEach((e,j)=>{
       const dx = b.x - e.x;
       const dy = b.y - e.y;
       const dist = Math.sqrt(dx*dx+dy*dy);
-      if(dist < e.radius+8){
-        explosions.push({x:e.x, y:e.y, t:20});
+      if(dist < e.radius+10){
+        explosions.push({x:e.x,y:e.y,t:20});
         enemies.splice(j,1);
         beams.splice(i,1);
       }
@@ -92,9 +98,9 @@ function draw(){
 
   // 爆発描画
   explosions.forEach((ex,i)=>{
-    ctx.fillStyle = `rgba(255,255,0,${ex.t/20})`;
+    ctx.fillStyle=`rgba(255,255,0,${ex.t/20})`;
     ctx.beginPath();
-    ctx.arc(ex.x, ex.y, 40*(1-ex.t/20),0,Math.PI*2);
+    ctx.arc(ex.x,ex.y,40*(1-ex.t/20),0,Math.PI*2);
     ctx.fill();
     ex.t--;
     if(ex.t<=0) explosions.splice(i,1);
